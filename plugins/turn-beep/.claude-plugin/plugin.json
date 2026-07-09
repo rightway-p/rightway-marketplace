@@ -1,6 +1,6 @@
 {
   "name": "turn-beep",
-  "description": "Plays a Windows system sound and/or shows a toast when a Claude Code turn ends, and distinct feedback when Claude needs your attention. Toggle sound/toast and customize the toast text with /turn-beep. Windows only.",
-  "version": "0.3.0",
+  "description": "Focus-aware turn-end feedback for Claude Code: sound always, plus a Windows toast (shown as Warp) only when Warp is not the foreground window. Fully configurable via /turn-beep. Windows only.",
+  "version": "0.4.0",
   "author": { "name": "Rivay.Park" }
 }
