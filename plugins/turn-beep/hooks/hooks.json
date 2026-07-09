@@ -1,0 +1,27 @@
+{
+  "description": "Play a WinAPI Beep tone when a Claude Code turn ends (Stop) or when Claude needs attention (Notification).",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/turn-beep.ps1\" stop",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/turn-beep.ps1\" notify",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

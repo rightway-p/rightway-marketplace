@@ -1,0 +1,16 @@
+{
+  "name": "rightway-marketplace",
+  "owner": { "name": "rightway-p" },
+  "metadata": {
+    "description": "Rivay.Park's Claude Code Plugin Marketplace",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "turn-beep",
+      "source": "./plugins/turn-beep",
+      "description": "Plays a WinAPI (kernel32 Beep) tone when a Claude Code turn ends (Stop) and a distinct tone when Claude needs attention (Notification). Windows only.",
+      "version": "0.1.0"
+    }
+  ]
+}

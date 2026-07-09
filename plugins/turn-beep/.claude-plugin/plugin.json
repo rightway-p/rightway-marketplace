@@ -1,0 +1,6 @@
+{
+  "name": "turn-beep",
+  "description": "Plays a WinAPI (kernel32 Beep) tone when a Claude Code turn ends, and a distinct tone when Claude needs your attention. Windows only.",
+  "version": "0.1.0",
+  "author": { "name": "Rivay.Park" }
+}
