@@ -1,6 +1,6 @@
 {
   "name": "turn-beep",
-  "description": "Focus-aware turn-end feedback for Claude Code: sound always, plus a Windows toast (shown as Warp) only when Warp is not the foreground window. Fully configurable via /turn-beep. Windows only.",
-  "version": "0.4.0",
+  "description": "Focus-aware turn-end feedback for Claude Code: a system sound plus a Warp desktop notification (OSC 777 via terminalSequence) only when Warp is not the foreground window. Configurable via /turn-beep. Windows + Warp.",
+  "version": "0.5.0",
   "author": { "name": "Rivay.Park" }
 }

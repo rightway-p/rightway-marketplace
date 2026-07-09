@@ -11,32 +11,35 @@ Rivay.Park's personal Claude Code plugin marketplace.
 
 ## Plugins
 
-### turn-beep (Windows only)
+### turn-beep (Windows + Warp)
 
-Sound and/or a Windows toast the moment a Claude Code turn ends, so you can look
-away and still know when Claude is done — or when it needs you.
+Sound and/or a **Warp desktop notification** the moment a Claude Code turn ends,
+so you can look away and still know when Claude is done — or when it needs you.
 
 **Focus-aware by default:**
 
-| Warp state | sound | toast |
-|------------|-------|-------|
+| Warp state | sound | Warp notification |
+|------------|-------|-------------------|
 | **active** (you're looking at it) | ✅ | ❌ |
 | **inactive** (you're in another window) | ✅ | ✅ |
 
-Whether Warp is the foreground window is detected with the Win32 API
-`GetForegroundWindow`. Sound uses Windows system sounds; toast uses the Windows
-Runtime notification, shown under Warp's own identity (`dev.warp.Warp`). Hooks
-run with `"async": true`, so nothing blocks Claude Code.
+- **Sound** — Windows system sound, played in a detached process so it never blocks Claude.
+- **Notification** — an OSC 777 sequence handed to Warp through Claude Code's
+  `terminalSequence` hook output (no `/dev/tty`, so it works on Windows). Only
+  emitted when running inside Warp; in other terminals you just get the sound.
+- Whether Warp is the foreground window is detected with the Win32 API `GetForegroundWindow`.
+
+Requires Claude Code 2.1.141+ and Warp (which advertises `WARP_CLI_AGENT_PROTOCOL_VERSION`).
 
 #### Manage it
 
 ```
-/turn-beep                      # show current settings
-/turn-beep active toast on      # also toast while Warp is focused
-/turn-beep inactive sound off   # silent (toast only) when away
-/turn-beep stop Hand            # change the turn-end sound
-/turn-beep stoptext             # pick/enter turn-end toast text (presets offered)
-/turn-beep test                 # play/show both now
+/turn-beep                       # show current settings
+/turn-beep active notify on      # also notify while Warp is focused
+/turn-beep inactive sound off    # notification only (silent) when away
+/turn-beep turnsound Hand        # change the turn-end sound
+/turn-beep turntext              # pick/enter turn-end notification text (presets offered)
+/turn-beep test                  # play the sounds now (notification shows on real turns)
 ```
 
 Valid sound names: `Asterisk`, `Beep`, `Exclamation`, `Hand`, `Question`.
@@ -45,13 +48,13 @@ Settings live in `~/.claude/turn-beep.json`:
 
 ```json
 {
-  "whenActive":   { "sound": true, "toast": false },
-  "whenInactive": { "sound": true, "toast": true },
-  "stopSound": "Asterisk",
-  "notifySound": "Exclamation",
-  "toastTitle": "Claude Code",
-  "stopToast": "턴이 끝났어요",
-  "notifyToast": "입력이 필요해요"
+  "whenActive":   { "sound": true, "warpNotification": false },
+  "whenInactive": { "sound": true, "warpNotification": true },
+  "turnEndSound": "Asterisk",
+  "needInputSound": "Exclamation",
+  "notificationTitle": "Claude Code",
+  "turnEndText": "턴이 끝났어요",
+  "needInputText": "입력이 필요해요"
 }
 ```
 

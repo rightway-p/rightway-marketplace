@@ -1,38 +1,42 @@
 ﻿<#
-  turn-beep.ps1 — Claude Code turn-end / notification feedback.
+  turn-beep.ps1 — Claude Code turn-end / needs-input feedback dispatcher.
 
-  Focus-aware: whether Warp is the foreground window decides which profile
-  (whenActive / whenInactive) applies. Detected via the Win32 API
-  GetForegroundWindow + GetWindowThreadProcessId.
+  Runs SYNCHRONOUSLY as a Stop / Notification hook. It:
+    1. reads the hook JSON on stdin (only to honor stop_hook_active),
+    2. detects whether Warp is the foreground window (Win32 GetForegroundWindow),
+    3. picks the whenActive / whenInactive profile from ~/.claude/turn-beep.json,
+    4. plays a system sound in a DETACHED process (so the hook returns fast), and
+    5. if enabled + running in Warp, emits an OSC 777 desktop-notification
+       escape sequence via Claude Code's `terminalSequence` hook-output field
+       (no /dev/tty needed -> works on Windows).
 
-  Config ~/.claude/turn-beep.json:
-    whenActive   : { sound, toast }  applied when Warp IS focused
-    whenInactive : { sound, toast }  applied when Warp is NOT focused
-    stopSound / notifySound : system sound name per event
-    toastTitle / stopToast / notifyToast : toast text
-
-  Defaults: Warp active -> sound only; Warp inactive -> sound + toast.
-  Toast is shown under Warp's identity (AUMID dev.warp.Warp).
-
-  Usage:
-    turn-beep.ps1 stop     # turn ended
-    turn-beep.ps1 notify   # needs input
-
-  Valid sound names: Asterisk, Beep, Exclamation, Hand, Question
+  Usage:  turn-beep.ps1 stop   |   turn-beep.ps1 notify
 #>
 param([string]$Event = "stop")
+
+$ErrorActionPreference = 'SilentlyContinue'
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch {}
+
+# --- stop_hook_active guard. Only read stdin when it is actually piped
+#     (so a manual `test` run does not block waiting for EOF). ---
+try {
+    if ([Console]::IsInputRedirected) {
+        $raw = [Console]::In.ReadToEnd()
+        if ($raw -and ($raw | ConvertFrom-Json).stop_hook_active) { exit 0 }
+    }
+} catch {}
 
 $configPath = Join-Path $env:USERPROFILE ".claude\turn-beep.json"
 
 function New-DefaultConfig {
     [pscustomobject]@{
-        whenActive   = [pscustomobject]@{ sound = $true; toast = $false }
-        whenInactive = [pscustomobject]@{ sound = $true; toast = $true  }
-        stopSound    = "Asterisk"
-        notifySound  = "Exclamation"
-        toastTitle   = "Claude Code"
-        stopToast    = "턴이 끝났어요"
-        notifyToast  = "입력이 필요해요"
+        whenActive        = [pscustomobject]@{ sound = $true; warpNotification = $false }
+        whenInactive      = [pscustomobject]@{ sound = $true; warpNotification = $true  }
+        turnEndSound      = "Asterisk"
+        needInputSound    = "Exclamation"
+        notificationTitle = "Claude Code"
+        turnEndText       = "턴이 끝났어요"
+        needInputText     = "입력이 필요해요"
     }
 }
 
@@ -44,9 +48,9 @@ if (-not $cfg) {
     $cfg = New-DefaultConfig
     $cfg | ConvertTo-Json | Set-Content -Path $configPath -Encoding UTF8
 }
-
-$props = $cfg.PSObject.Properties.Name
-function Get-Cfg($key, $fallback) { if ($props -contains $key) { $cfg.$key } else { $fallback } }
+function Get-Cfg($key, $fallback) {
+    if ($cfg.PSObject.Properties.Name -contains $key) { $cfg.$key } else { $fallback }
+}
 
 # --- Is Warp the foreground window? (Win32 API) ---
 $warpActive = $false
@@ -62,55 +66,59 @@ public static extern int GetWindowThreadProcessId(System.IntPtr hWnd, out int pi
     $hwnd = [TurnBeep.Fg]::GetForegroundWindow()
     $fgPid = 0
     [TurnBeep.Fg]::GetWindowThreadProcessId($hwnd, [ref]$fgPid) | Out-Null
-    $fgProc = (Get-Process -Id $fgPid -ErrorAction SilentlyContinue).ProcessName
-    $warpActive = ($fgProc -eq 'warp')
+    $warpActive = ((Get-Process -Id $fgPid -ErrorAction SilentlyContinue).ProcessName -eq 'warp')
 } catch { $warpActive = $false }
 
-# Pick the profile for the current focus state.
 $mode = if ($warpActive) { Get-Cfg 'whenActive' $null } else { Get-Cfg 'whenInactive' $null }
 if ($mode) {
-    $soundOn = [bool]$mode.sound
-    $toastOn = [bool]$mode.toast
+    $soundOn  = [bool]$mode.sound
+    $notifyOn = [bool]$mode.warpNotification
 } else {
-    # Back-compat with flat v0.3 config (sound/toast at top level).
-    $soundOn = [bool](Get-Cfg 'sound' $true)
-    $toastOn = if ($warpActive) { $false } else { [bool](Get-Cfg 'toast' $true) }
+    $soundOn  = $true
+    $notifyOn = (-not $warpActive)
 }
 
-$isNotify = ($Event -eq "notify")
+$isNotify = ($Event -eq 'notify')
 
-# --- Toast (shown as Warp). Wrapped so a failure never breaks the hook. ---
-if ($toastOn) {
-    try {
-        $title = [string](Get-Cfg 'toastTitle' "Claude Code")
-        $body  = if ($isNotify) { [string](Get-Cfg 'notifyToast' "입력이 필요해요") }
-                 else           { [string](Get-Cfg 'stopToast'   "턴이 끝났어요") }
-
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-        [Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime]        | Out-Null
-        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]         | Out-Null
-
-        $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-        $texts = $template.GetElementsByTagName("text")
-        $texts.Item(0).AppendChild($template.CreateTextNode($title)) | Out-Null
-        $texts.Item(1).AppendChild($template.CreateTextNode($body))  | Out-Null
-
-        $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('dev.warp.Warp').Show($toast)
-    } catch { }
-}
-
-# --- Sound (Windows system sound) ---
+# --- Sound: launch detached so the (synchronous) hook returns immediately ---
 if ($soundOn) {
-    $name = if ($isNotify) { Get-Cfg 'notifySound' "Exclamation" } else { Get-Cfg 'stopSound' "Asterisk" }
-    $sound = switch ($name) {
-        "Beep"        { [System.Media.SystemSounds]::Beep }
-        "Exclamation" { [System.Media.SystemSounds]::Exclamation }
-        "Hand"        { [System.Media.SystemSounds]::Hand }
-        "Question"    { [System.Media.SystemSounds]::Question }
-        default       { [System.Media.SystemSounds]::Asterisk }
-    }
-    # .Play() is asynchronous; keep the process alive briefly so it isn't cut off.
-    $sound.Play()
-    Start-Sleep -Milliseconds 800
+    $sname = if ($isNotify) { Get-Cfg 'needInputSound' "Exclamation" } else { Get-Cfg 'turnEndSound' "Asterisk" }
+    if ($sname -notin @('Asterisk','Beep','Exclamation','Hand','Question')) { $sname = 'Asterisk' }
+    Start-Process -FilePath 'powershell' -WindowStyle Hidden -ArgumentList @(
+        '-NoProfile','-ExecutionPolicy','Bypass','-File',
+        (Join-Path $PSScriptRoot 'play-sound.ps1'), $sname
+    ) | Out-Null
 }
+
+# --- Warp notification via OSC 777 through the terminalSequence hook output ---
+if ($notifyOn -and $env:TERM_PROGRAM -eq 'WarpTerminal') {
+    function Clean-Text($s) {
+        $t = ([string]$s) -replace '[;\r\n]', ' '
+        -join ($t.ToCharArray() | Where-Object { $c = [int]$_; $c -ne 27 -and $c -ne 7 })
+    }
+    $title = Clean-Text (Get-Cfg 'notificationTitle' "Claude Code")
+    $body  = if ($isNotify) { Clean-Text (Get-Cfg 'needInputText' "입력이 필요해요") }
+             else           { Clean-Text (Get-Cfg 'turnEndText'   "턴이 끝났어요") }
+
+    $esc = [char]27; $bel = [char]7
+    $seq = "$esc]777;notify;$title;$body$bel"
+
+    # Emit PURE-ASCII JSON: escape every non-ASCII / control char to \uXXXX so the
+    # bytes are identical in any encoding (Korean survives the pipe to Claude Code,
+    # which JSON-parses it back and forwards the real chars to Warp).
+    function ConvertTo-AsciiJsonString($s) {
+        $sb = New-Object System.Text.StringBuilder
+        foreach ($ch in $s.ToCharArray()) {
+            $code = [int]$ch
+            if     ($ch -eq '"')  { [void]$sb.Append('\"') }
+            elseif ($ch -eq '\')  { [void]$sb.Append('\\') }
+            elseif ($code -lt 32 -or $code -gt 126) { [void]$sb.Append(('\u{0:x4}' -f $code)) }
+            else   { [void]$sb.Append($ch) }
+        }
+        $sb.ToString()
+    }
+    $out = '{"terminalSequence":"' + (ConvertTo-AsciiJsonString $seq) + '","suppressOutput":true}'
+    [Console]::Out.Write($out)
+}
+
+exit 0
