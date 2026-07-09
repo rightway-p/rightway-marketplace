@@ -9,8 +9,8 @@
     {
       "name": "turn-beep",
       "source": "./plugins/turn-beep",
-      "description": "Plays a Windows system sound when a Claude Code turn ends (Stop) and a distinct sound when Claude needs attention (Notification). Toggle and configure with /turn-beep. Windows only.",
-      "version": "0.2.0"
+      "description": "Plays a Windows system sound and/or shows a toast when a Claude Code turn ends (Stop) and distinct feedback when Claude needs attention (Notification). Toggle sound/toast and customize toast text with /turn-beep. Windows only.",
+      "version": "0.3.0"
     }
   ]
 }

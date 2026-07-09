@@ -13,24 +13,27 @@ Rivay.Park's personal Claude Code plugin marketplace.
 
 ### turn-beep (Windows only)
 
-Plays a sound the moment a Claude Code turn ends, so you can look away and still
-know when Claude is done — or when it needs you.
+Sound and/or a Windows toast the moment a Claude Code turn ends, so you can look
+away and still know when Claude is done — or when it needs you.
 
-- **Turn ended (`Stop`)** → `stopSound` (default: Asterisk)
-- **Needs attention (`Notification`)** → `notifySound` (default: Exclamation)
+- **Turn ended (`Stop`)** → `stopSound` + toast `stopToast`
+- **Needs attention (`Notification`)** → `notifySound` + toast `notifyToast`
 
-Sounds are Windows system sounds played through the sound card, so they work on
-laptops that have no internal buzzer. Hooks run with `"async": true`, so the
-sound never blocks Claude Code.
+Sound uses Windows system sounds (works on laptops with no internal buzzer).
+Toast uses the Windows Runtime notification (shows in Action Center). Sound and
+toast are **independent toggles**. Hooks run with `"async": true`, so nothing
+blocks Claude Code.
 
 #### Manage it
 
 ```
-/turn-beep            # show current settings
-/turn-beep off        # mute
-/turn-beep on         # unmute
-/turn-beep stop Hand  # change the turn-end sound
-/turn-beep test       # play both sounds now
+/turn-beep                 # show current settings
+/turn-beep sound on|off    # sound toggle
+/turn-beep toast on|off    # toast toggle
+/turn-beep stop Hand       # change the turn-end sound
+/turn-beep stoptext        # pick/enter turn-end toast text (presets offered)
+/turn-beep title 🤖 Claude # change toast title
+/turn-beep test            # play/show both now
 ```
 
 Valid sound names: `Asterisk`, `Beep`, `Exclamation`, `Hand`, `Question`.
@@ -39,10 +42,15 @@ Settings live in `~/.claude/turn-beep.json`:
 
 ```json
 {
-  "enabled": true,
+  "sound": true,
+  "toast": false,
   "stopSound": "Asterisk",
-  "notifySound": "Exclamation"
+  "notifySound": "Exclamation",
+  "toastTitle": "Claude Code",
+  "stopToast": "턴이 끝났어요",
+  "notifyToast": "입력이 필요해요"
 }
 ```
 
-The file is created with these defaults the first time the hook runs.
+The file is created with these defaults the first time the hook runs. Toast
+title and body are free text — edit the file directly or use `/turn-beep`.
